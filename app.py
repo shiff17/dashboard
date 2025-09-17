@@ -34,21 +34,25 @@ def make_severity_from_cvss(df):
         df["severity"] = pd.cut(df["cvss"], bins=bins, labels=labels, include_lowest=True)
 
 def baseline_regression(df, target_col):
-    if target_col not in df.columns:
-        return None
-    numeric = safe_numeric_df(df)
-    y = pd.to_numeric(df[target_col], errors="coerce")
-    X = numeric.drop(columns=[c for c in numeric.columns if c == target_col], errors="ignore")
-    mask = ~y.isna()
-    X, y = X.loc[mask], y.loc[mask]
-    if X.shape[1] == 0 or X.shape[0] < 12:
-        return None
+    from sklearn.model_selection import train_test_split
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import r2_score, mean_squared_error
+    import numpy as np
+
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
+
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
+
     model = LinearRegression().fit(Xtr, ytr)
     preds = model.predict(Xte)
-    return dict((r2=round(float(r2_score(yte, preds)), 4),
-                mse = mean_squared_error(yte, preds)
-                rmse = round(float(np.sqrt(mse)), 4)
+
+    mse = mean_squared_error(yte, preds)
+
+    return {
+        "r2": round(float(r2_score(yte, preds)), 4),
+        "rmse": round(float(np.sqrt(mse)), 4)
+    }
 
 def rl_cleaning_search(df, target_col, iterations=10):
     rng = np.random.default_rng(42)
