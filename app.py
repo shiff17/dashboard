@@ -37,40 +37,36 @@ def make_severity_from_cvss(df):
         labels = ["Low", "Medium", "High", "Critical"]
         df["severity"] = pd.cut(df["cvss"], bins=bins, labels=labels, include_lowest=True)
 
-def baseline_regression(df, target_col):
+def baseline regression(df,target_col):
     """Simple baseline linear regression using numeric features."""
     if target_col is None or target_col not in df.columns:
-        return {"r2": None, "rmse": None, "note": "No valid target selected."}
+        return {"r2":None,"rmse":None,"note":"No valid targeted selected."}
+        
+#work only with numeric features + ensure target numeric
+numeric=safe_numeric_df(df).copy()
+if target_col not in numeric.columns:
+     numeric[target_col]=pd.to_numeric(df[target_col],errors="coerce")
 
-    # work only with numeric features + ensure target numeric
-    numeric = safe_numeric_df(df).copy()
-    # if target is not in numeric, coerce from original df
-    if target_col not in numeric.columns:
-        numeric[target_col] = pd.to_numeric(df[target_col], errors="coerce")
+     y=numeric[target_col].dropna()
+     x=numeric.drop(columns=[target_col],errors="ignore").loc[y.index]
 
-    # drop rows with NA in target
-    y = numeric[target_col].dropna()
-    X = numeric.drop(columns=[target_col], errors="ignore").loc[y.index]
+     if X.shape[1]==0 or X.shape[0]<10:
+         return{"r2":None,"rmse":None,"note":"Not enough data/features for baseline."}
 
-    if X.shape[1] == 0 or X.shape[0] < 10:
-        return {"r2": None, "rmse": None, "note": "Not enough data/features for baseline."}
+         Xtr,Xte,ytr,yte=train_test_split(X,y,test_size=0.2,random_state=42)
+         model=LinearRegression().fit(Xtr,ytr)
+         preds=model.predict(Xte)
 
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    model = LinearRegression().fit(Xtr, ytr)
-    preds = model.predict(Xte)
-
-    mse = mean_squared_error(yte, preds)
-    rmse = round(float(np.sqrt(mse)), 4)
-
-    return dict(
-        r2= round(float(r2_score(yte, preds)), 4),
-        rmse=rmse
-    )
+         mse=mean_squared_error(yte,preds)
+         rmse=round(float(np.sqrt(mse)),4)
+         return{
+             "r2":round(float(r2_score(yte,preds)),4),
+             "rmse":rmse
+         }
 
 def rl_cleaning_search(df, target_col, iterations=10):
     """
-    A randomized search over a few simple preprocessing strategies
+    A randomised search over a few simple preprocessing strategies
     and returns the best transformed dataframe (with target) and logs.
     """
     rng = np.random.default_rng(42)
@@ -221,3 +217,4 @@ if "clean" in st.session_state and st.session_state["clean"] is not None:
 
     st.write("### RL Logs")
     st.dataframe(pd.DataFrame(st.session_state["rl"]["logs"]))
+    
