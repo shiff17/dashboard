@@ -1,5 +1,6 @@
 import io, zipfile, time
 import numpy as np
+from sklearn.metrics import mean_squared_error
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -46,7 +47,8 @@ def baseline_regression(df, target_col):
     model = LinearRegression().fit(Xtr, ytr)
     preds = model.predict(Xte)
     return dict(r2=round(float(r2_score(yte, preds)), 4),
-                rmse=round(float(mean_squared_error(yte, preds, squared=False)), 4))
+                mse = mean_squared_error(yte, preds)
+                rmse = round(float(np.sqrt(mse)), 4)
 
 def rl_cleaning_search(df, target_col, iterations=10):
     rng = np.random.default_rng(42)
