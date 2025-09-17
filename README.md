@@ -11,5 +11,7 @@ A Streamlit dashboard for:
 ## 🚀 Run locally
 
 ```bash
+pip install --upgrade pip
+setuptools wheel
 pip install -r requirements.txt
 streamlit run app.py
