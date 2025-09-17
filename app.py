@@ -74,6 +74,7 @@ def baseline_regression(df, target_col):
     return dict(
         r2 = round(float(r2_score(yte, preds)), 4),
         rmse=rmse
+    )
 
 def rl_cleaning_search(df, target_col, iterations=10):
     rng = np.random.default_rng(42)
