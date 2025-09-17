@@ -1,89 +1,94 @@
+import streamlit as st
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
-import io
 
-def export_plot(fig, filename, df=None):
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    st.download_button("⬇ Download Plot (PNG)", buf.getvalue(), file_name=f"{filename}.png", mime="image/png")
-    if df is not None:
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("⬇ Download Data (CSV)", csv, file_name=f"{filename}.csv", mime="text/csv")
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.cluster import KMeans
+from sklearn.metrics import r2_score, mean_squared_error
 
-def plot_histogram(df, column):
-    fig, ax = plt.subplots()
-    sns.histplot(df[column].dropna(), kde=True, ax=ax)
-    ax.set_title(f"Histogram of {column}")
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_histogram", df[[column]].dropna())
+# ---------------------- Models ----------------------
+def run_models(num_df):
+    st.subheader("🤖 Machine Learning Models")
+    try:
+        X = num_df.iloc[:, :-1]
+        y = num_df.iloc[:, -1]
 
-def plot_boxplot(df, column):
-    fig, ax = plt.subplots()
-    sns.boxplot(y=df[column].dropna(), ax=ax)
-    ax.set_title(f"Boxplot of {column}")
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_boxplot", df[[column]].dropna())
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
 
-def plot_kde(df, column):
-    fig, ax = plt.subplots()
-    sns.kdeplot(df[column].dropna(), fill=True, ax=ax)
-    ax.set_title(f"KDE of {column}")
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_kde", df[[column]].dropna())
+        # Scaling
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
 
-def plot_correlation_heatmap(df):
-    num = df.select_dtypes(include="number")
-    if num.shape[1] < 2:
-        st.warning("Not enough numeric columns for heatmap.")
-        return
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sns.heatmap(num.corr(), annot=True, cmap="coolwarm", ax=ax)
-    st.pyplot(fig)
-    export_plot(fig, "correlation_heatmap", num.corr().reset_index())
+        # Linear Regression
+        lr = LinearRegression()
+        lr.fit(X_train_scaled, y_train)
+        y_pred_lr = lr.predict(X_test_scaled)
+        st.write(f"*Linear Regression R²:* {r2_score(y_test, y_pred_lr):.3f}")
+        st.write(f"*Linear Regression RMSE:* {np.sqrt(mean_squared_error(y_test, y_pred_lr)):.3f}")
 
-def plot_pairplot(df):
-    num = df.select_dtypes(include="number")
-    if num.shape[1] < 2:
-        st.warning("Not enough numeric columns for pairplot.")
-        return
-    fig = sns.pairplot(num)
-    st.pyplot(fig)
-    csv = num.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇ Download Data (CSV)", csv, file_name="pairplot_data.csv", mime="text/csv")
+        # Random Forest
+        rf = RandomForestRegressor(random_state=42)
+        rf.fit(X_train, y_train)
+        y_pred_rf = rf.predict(X_test)
+        st.write(f"*Random Forest R²:* {r2_score(y_test, y_pred_rf):.3f}")
+        st.write(f"*Random Forest RMSE:* {np.sqrt(mean_squared_error(y_test, y_pred_rf)):.3f}")
 
-def plot_scatter(df, x_col, y_col):
-    fig, ax = plt.subplots()
-    sns.scatterplot(x=df[x_col], y=df[y_col], ax=ax)
-    ax.set_title(f"Scatterplot of {x_col} vs {y_col}")
-    st.pyplot(fig)
-    export_plot(fig, f"{x_col}vs{y_col}_scatter", df[[x_col, y_col]].dropna())
+    except Exception as e:
+        st.error(f"⚠ Model training failed: {e}")
 
-def plot_violin(df, column):
-    fig, ax = plt.subplots()
-    sns.violinplot(y=df[column].dropna(), ax=ax)
-    ax.set_title(f"Violin Plot of {column}")
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_violin", df[[column]].dropna())
 
-def plot_count(df, column):
-    fig, ax = plt.subplots()
-    sns.countplot(x=df[column], ax=ax)
-    ax.set_title(f"Count Plot of {column}")
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_countplot", df[[column]].dropna())
+# ---------------------- Feature Selection ----------------------
+def feature_selection(num_df):
+    st.subheader("📌 Feature Importance / Selection")
+    try:
+        X = num_df.iloc[:, :-1]
+        y = num_df.iloc[:, -1]
 
-def plot_line(df, column):
-    fig, ax = plt.subplots()
-    df[column].dropna().reset_index(drop=True).plot(ax=ax)
-    ax.set_title(f"Line Plot of {column}")
-    st.pyplot(fig)
-    export_plot(fig, f"{column}_lineplot", df[[column]].dropna())
+        selector = SelectKBest(score_func=f_regression, k="all")
+        selector.fit(X, y)
+        scores = selector.scores_
 
-def plot_heatmap_nulls(df):
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.heatmap(df.isnull(), cbar=False, cmap="viridis", ax=ax)
-    ax.set_title("Heatmap of Missing Values")
-    st.pyplot(fig)
-    export_plot(fig, "missing_values_heatmap", df.isnull().astype(int).reset_index())
+        feat_scores = pd.DataFrame({
+            "Feature": X.columns,
+            "Score": scores
+        }).sort_values(by="Score", ascending=False)
+
+        st.write(feat_scores)
+
+        fig, ax = plt.subplots()
+        sns.barplot(data=feat_scores, x="Score", y="Feature", ax=ax)
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"⚠ Feature selection failed: {e}")
+
+
+# ---------------------- Clustering ----------------------
+def clustering(num_df):
+    st.subheader("🔗 KMeans Clustering")
+    try:
+        X = num_df.iloc[:, :-1]
+        k = st.slider("Select number of clusters (k)", 2, 10, 3)
+
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        clusters = kmeans.fit_predict(X)
+
+        num_df["Cluster"] = clusters
+        st.write("✅ Cluster labels added")
+        st.write(num_df.head())
+
+        fig, ax = plt.subplots()
+        sns.scatterplot(x=X.iloc[:, 0], y=X.iloc[:, 1], hue=clusters, palette="tab10", ax=ax)
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"⚠ Clustering failed: {e}")
