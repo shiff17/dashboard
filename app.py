@@ -48,7 +48,6 @@ def baseline_regression(df, target_col):
     preds = model.predict(Xte)
 
     mse = mean_squared_error(yte, preds)
-
     return {
         "r2": round(float(r2_score(yte, preds)),4),
         "rmse": round(float(np.sqrt(mse)),4)
