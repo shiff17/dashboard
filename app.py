@@ -70,10 +70,10 @@ def baseline_regression(df, target_col):
 
     # --- 8. Evaluate ---
     mse = mean_squared_error(yte, preds)
+    rmse = round(float(np.sqrt(mse)), 4) 
     return dict(
-        r2=round(float(r2_score(yte, preds)), 4),
-        rmse=round(float(np.sqrt(mse)), 4)
-    )
+        r2 = round(float(r2_score(yte, preds)), 4),
+        rmse=rmse
 
 def rl_cleaning_search(df, target_col, iterations=10):
     rng = np.random.default_rng(42)
