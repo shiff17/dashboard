@@ -46,7 +46,7 @@ def baseline_regression(df, target_col):
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
     model = LinearRegression().fit(Xtr, ytr)
     preds = model.predict(Xte)
-    return dict(r2=round(float(r2_score(yte, preds)), 4),
+    return dict((r2=round(float(r2_score(yte, preds)), 4),
                 mse = mean_squared_error(yte, preds)
                 rmse = round(float(np.sqrt(mse)), 4)
 
