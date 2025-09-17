@@ -1,4 +1,5 @@
 streamlit
+streamlit-fasthtml
 scikit-learn
 pandas
 numpy
