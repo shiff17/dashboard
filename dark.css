@@ -1,0 +1,11 @@
+body {
+    background-color: #0d1117;
+    color: #ffffff;
+}
+.centered-title {
+    text-align: center;
+    font-size: 3em;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #1e3a8a;
+}
