@@ -15,3 +15,5 @@ pip install --upgrade pip
 setuptools wheel
 pip install -r requirements.txt
 streamlit run app.py
+cd~/projects/dashboard
+sed -i 's/\xc2\xao/ /g' app.py
