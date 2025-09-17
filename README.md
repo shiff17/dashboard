@@ -17,3 +17,7 @@ pip install -r requirements.txt
 streamlit run app.py
 cd~/projects/dashboard
 sed -i 's/\xc2\xao/ /g' app.py
+get diff app.py
+git add app.py
+git commit -m "fix non-breaking spaces in app.py"
+git push origin main
