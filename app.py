@@ -34,25 +34,46 @@ def make_severity_from_cvss(df):
         df["severity"] = pd.cut(df["cvss"], bins=bins, labels=labels, include_lowest=True)
 
 def baseline_regression(df, target_col):
+    import numpy as np
+    import pandas as pd
     from sklearn.model_selection import train_test_split
     from sklearn.linear_model import LinearRegression
     from sklearn.metrics import r2_score, mean_squared_error
-    import numpy as np
 
+    # --- 1. Check target column ---
+    if target_col not in df.columns:
+        raise ValueError(f"Target column '{target_col}' not found in dataframe")
+
+    # --- 2. Split features and target ---
     X = df.drop(columns=[target_col])
     y = df[target_col]
 
+    # --- 3. Handle categorical variables (one-hot encoding) ---
+    X = pd.get_dummies(X, drop_first=True)
+
+    # --- 4. Ensure numeric types only ---
+    X = X.select_dtypes(include=[np.number]).fillna(0)
+    y = pd.to_numeric(y, errors="coerce").fillna(0)
+
+    # --- 5. Align indices ---
+    y = y.loc[X.index]
+
+    if X.empty or y.empty:
+        raise ValueError("Training data became empty after preprocessing.")
+
+    # --- 6. Train-test split ---
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
 
+    # --- 7. Fit model ---
     model = LinearRegression().fit(Xtr, ytr)
     preds = model.predict(Xte)
 
-    mse= mean_squared_error(yte, preds)
-    return
-    {
-        "r2": round(float(r2_score(yte, preds)), 4),
-        "rmse": round(float(np.sqrt(mse)),4)
-    }
+    # --- 8. Evaluate ---
+    mse = mean_squared_error(yte, preds)
+    return dict(
+        r2=round(float(r2_score(yte, preds)), 4),
+        rmse=round(float(np.sqrt(mse)), 4)
+    )
 
 def rl_cleaning_search(df, target_col, iterations=10):
     rng = np.random.default_rng(42)
