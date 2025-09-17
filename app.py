@@ -39,18 +39,18 @@ def baseline_regression(df, target_col):
     from sklearn.metrics import r2_score, mean_squared_error
     import numpy as np
 
-    x = df.drop(columns=[target_col])
-    y = df[target_cols]
+    x= df.drop(columns=[target_col])
+    y= df[target_cols]
 
     Xtr, Xte, yte = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    model = LinearRegression().fit(Xtr, ytr)
-    preds = model.predict(Xte)
+    model= LinearRegression().fit(Xtr, ytr)
+    preds= model.predict(Xte)
     
-    mse = mean_squared_error(yte, preds)
-    rmse = round(float(np.sqrt(mse)), 4) 
+    mse= mean_squared_error(yte, preds)
+    rmse= round(float(np.sqrt(mse)), 4) 
     return dict(
-        r2 = round(float(r2_score(yte, preds)), 4),
+        r2= round(float(r2_score(yte, preds)), 4),
         rmse=rmse
     )
 
