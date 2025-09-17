@@ -10,7 +10,6 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import SelectKBest, f_regression
-from sklearn.cluster import KMeans
 from sklearn.metrics import r2_score, mean_squared_error
 
 # ---------------------- Page Setup ----------------------
@@ -40,7 +39,6 @@ st.markdown(
         background-color: {bg_color};
         color: {text_color};
     }}
-    /* Centered Title */
     .centered-title {{
         text-align: center;
         font-size: 3em;
@@ -48,7 +46,6 @@ st.markdown(
         margin-bottom: 20px;
         color: {primary_color};
     }}
-    /* Top Navigation Bar */
     .topnav {{
         overflow: hidden;
         background-color: transparent;
@@ -70,7 +67,6 @@ st.markdown(
         color: white;
         border-radius: 5px;
     }}
-    /* Toggle Button */
     .toggle-btn {{
         position: absolute;
         top: 20px;
@@ -114,14 +110,16 @@ def make_severity_from_cvss(df):
         labels = ["Low", "Medium", "High", "Critical"]
         df["severity"] = pd.cut(df["cvss"], bins=bins, labels=labels, include_lowest=True)
 
+# ---------------------- Safe Regression ----------------------
 def baseline_regression(df, target_col):
-    """Simple baseline linear regression using numeric features."""
+    """Simple baseline linear regression using numeric features (safe version)."""
     if target_col is None or target_col not in df.columns:
         return {"r2": None, "rmse": None, "note": "No valid target selected."}
 
-    numeric = safe_numeric_df(df).copy()
+    numeric = df.apply(pd.to_numeric, errors="coerce")
+
     if target_col not in numeric.columns:
-        numeric[target_col] = pd.to_numeric(df[target_col], errors="coerce")
+        return {"r2": None, "rmse": None, "note": "Target column not numeric."}
 
     y = numeric[target_col].dropna()
     X = numeric.drop(columns=[target_col], errors="ignore").loc[y.index]
@@ -131,25 +129,31 @@ def baseline_regression(df, target_col):
 
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    model = LinearRegression().fit(Xtr, ytr)
-    preds = model.predict(Xte)
+    try:
+        model = LinearRegression().fit(Xtr, ytr)
+        preds = model.predict(Xte)
 
-    mse = mean_squared_error(yte, preds)
-    rmse = round(float(np.sqrt(mse)), 4)
+        mse = mean_squared_error(yte, preds)
+        rmse = round(float(np.sqrt(mse)), 4)
 
-    return dict(r2=round(float(r2_score(yte, preds)), 4), rmse=rmse)
+        return dict(r2=round(float(r2_score(yte, preds)), 4), rmse=rmse)
+    except Exception as e:
+        return {"r2": None, "rmse": None, "note": f"Error: {str(e)}"}
 
+# ---------------------- Safe RL Cleaning ----------------------
 def rl_cleaning_search(df, target_col, iterations=10):
+    """Safe cleaning + model search with random strategies."""
     rng = np.random.default_rng(42)
     best = {"r2": -1e9, "rmse": 1e9, "df": None}
     logs = []
 
-    numeric = safe_numeric_df(df)
     if target_col not in df.columns:
         return {"best": best, "logs": logs}
 
-    y = pd.to_numeric(df[target_col], errors="coerce")
-    X = numeric.drop(columns=[c for c in numeric.columns if c == target_col], errors="ignore")
+    numeric = df.apply(pd.to_numeric, errors="coerce")
+
+    y = numeric[target_col]
+    X = numeric.drop(columns=[target_col], errors="ignore")
     mask = ~y.isna()
     X, y = X.loc[mask], y.loc[mask]
 
@@ -158,6 +162,7 @@ def rl_cleaning_search(df, target_col, iterations=10):
 
     def evaluate(strategy):
         Xt = X.copy()
+
         if strategy["impute"] == "mean":
             Xt = Xt.fillna(Xt.mean())
         elif strategy["impute"] == "median":
@@ -175,20 +180,26 @@ def rl_cleaning_search(df, target_col, iterations=10):
             Xt = pd.DataFrame(MinMaxScaler().fit_transform(Xt), index=Xt.index, columns=Xt.columns)
 
         if strategy["kbest"] > 0 and strategy["kbest"] < Xt.shape[1]:
-            selector = SelectKBest(score_func=f_regression, k=strategy["kbest"]).fit(Xt, yt)
-            cols = Xt.columns[selector.get_support(indices=True)]
-            Xt = Xt.loc[:, cols]
+            try:
+                selector = SelectKBest(score_func=f_regression, k=strategy["kbest"]).fit(Xt, yt)
+                cols = Xt.columns[selector.get_support(indices=True)]
+                Xt = Xt.loc[:, cols]
+            except Exception:
+                return -1e9, 1e9, Xt, yt
 
         if Xt.shape[0] < 10 or Xt.shape[1] == 0:
             return -1e9, 1e9, Xt, yt
 
-        Xtr, Xte, ytr, yte = train_test_split(Xt, yt, test_size=0.2, random_state=42)
-        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-        model.fit(Xtr, ytr)
-        pred = model.predict(Xte)
-        r2 = r2_score(yte, pred)
-        rmse = mean_squared_error(yte, pred, squared=False)
-        return r2, rmse, Xt, yt
+        try:
+            Xtr, Xte, ytr, yte = train_test_split(Xt, yt, test_size=0.2, random_state=42)
+            model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+            model.fit(Xtr, ytr)
+            pred = model.predict(Xte)
+            r2 = r2_score(yte, pred)
+            rmse = mean_squared_error(yte, pred, squared=False)
+            return r2, rmse, Xt, yt
+        except Exception:
+            return -1e9, 1e9, Xt, yt
 
     for i in range(iterations):
         strategy = {
@@ -226,9 +237,18 @@ if selected_page == "Home":
     if uploaded:
         df = pd.read_csv(uploaded)
         df.columns = df.columns.str.strip()
+
+        # ✅ Force numeric conversion
+        for col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df = df.dropna(how="all")
         make_severity_from_cvss(df)
+
         st.session_state["df"] = df
         st.write("### Data Preview", df.head())
+        st.write("### Column Data Types", df.dtypes)
+        st.write("### Missing Values per Column", df.isna().sum())
 
 elif selected_page == "Analysis & Insights":
     if "df" not in st.session_state:
@@ -243,9 +263,14 @@ elif selected_page == "Analysis & Insights":
         st.write("*Correlation Heatmap*")
         num = safe_numeric_df(df)
         if num.shape[1] > 1:
-            plt.figure(figsize=(6, 4))
-            sns.heatmap(num.corr(), annot=True, cmap="Blues")
-            st.pyplot(plt.gcf())
+            try:
+                plt.figure(figsize=(6, 4))
+                sns.heatmap(num.corr(), annot=True, cmap="Blues")
+                st.pyplot(plt.gcf())
+            except Exception as e:
+                st.warning(f"Could not render correlation heatmap: {e}")
+        else:
+            st.info("Not enough numeric columns for a correlation heatmap.")
 
         # ---------------------- Before & After Cleaning ----------------------
         if "clean" in st.session_state and st.session_state["clean"] is not None:
@@ -256,41 +281,46 @@ elif selected_page == "Analysis & Insights":
                 plot_type = st.radio("Select plot type", ["Histogram", "Boxplot", "KDE"], horizontal=True)
 
                 if choice:
-                    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-                    before = st.session_state["df"][choice].dropna()
-                    after = st.session_state["clean"][choice].dropna()
+                    try:
+                        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+                        before = pd.to_numeric(st.session_state["df"][choice], errors="coerce").dropna()
+                        after = pd.to_numeric(st.session_state["clean"][choice], errors="coerce").dropna()
 
-                    if plot_type == "Histogram":
-                        sns.histplot(before, kde=True, color="red", ax=axes[0])
-                        sns.histplot(after, kde=True, color="green", ax=axes[1])
-                    elif plot_type == "Boxplot":
-                        sns.boxplot(y=before, color="red", ax=axes[0])
-                        sns.boxplot(y=after, color="green", ax=axes[1])
-                    elif plot_type == "KDE":
-                        sns.kdeplot(before, fill=True, color="red", ax=axes[0])
-                        sns.kdeplot(after, fill=True, color="green", ax=axes[1])
+                        if len(before) == 0 or len(after) == 0:
+                            st.warning("No valid numeric data available for comparison.")
+                        else:
+                            if plot_type == "Histogram":
+                                sns.histplot(before, kde=True, color="red", ax=axes[0])
+                                sns.histplot(after, kde=True, color="green", ax=axes[1])
+                            elif plot_type == "Boxplot":
+                                sns.boxplot(y=before, color="red", ax=axes[0])
+                                sns.boxplot(y=after, color="green", ax=axes[1])
+                            elif plot_type == "KDE":
+                                sns.kdeplot(before, fill=True, color="red", ax=axes[0])
+                                sns.kdeplot(after, fill=True, color="green", ax=axes[1])
 
-                    axes[0].set_title("Before Cleaning")
-                    axes[1].set_title("After Cleaning")
-                    st.pyplot(fig)
+                            axes[0].set_title("Before Cleaning")
+                            axes[1].set_title("After Cleaning")
+                            st.pyplot(fig)
 
-                    # ---------------- EXPORT OPTIONS ----------------
-                    st.write("### 📤 Export Options")
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format="png")
-                    st.download_button(
-                        label="⬇ Download Comparison Plot (PNG)",
-                        data=buf.getvalue(),
-                        file_name=f"{choice}_before_after.png",
-                        mime="image/png"
-                    )
-                    csv = st.session_state["clean"].to_csv(index=False).encode("utf-8")
-                    st.download_button(
-                        label="⬇ Download Cleaned Data (CSV)",
-                        data=csv,
-                        file_name="cleaned_data.csv",
-                        mime="text/csv"
-                    )
+                            st.write("### 📤 Export Options")
+                            buf = io.BytesIO()
+                            fig.savefig(buf, format="png")
+                            st.download_button(
+                                label="⬇ Download Comparison Plot (PNG)",
+                                data=buf.getvalue(),
+                                file_name=f"{choice}_before_after.png",
+                                mime="image/png"
+                            )
+                            csv = st.session_state["clean"].to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                label="⬇ Download Cleaned Data (CSV)",
+                                data=csv,
+                                file_name="cleaned_data.csv",
+                                mime="text/csv"
+                            )
+                    except Exception as e:
+                        st.warning(f"Could not render before/after plot: {e}")
 
 elif selected_page == "Custom Visualizations":
     st.subheader("🎨 Custom Visualizations")
